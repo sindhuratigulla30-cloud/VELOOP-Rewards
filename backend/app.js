@@ -13,7 +13,8 @@ app.use(helmet());
 
 app.use(cors({
   origin: [
-    "http://localhost:5173"
+    "http://localhost:5173",
+    "https://veloop-rewards-flame.vercel.app"
   ],
   credentials: true
 }));
@@ -33,6 +34,7 @@ app.get("/", (req, res) => {
     message: "VELOOP Rewards Backend API is running"
   });
 });
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/giveaways", giveawayRoutes);
