@@ -17,9 +17,7 @@ import {
   XCircle
 } from "lucide-react";
 import "./UserDashboard.css";
-
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+import API_URL from "./api.js";
 
 function formatDate(value) {
   if (!value) return "Date unavailable";

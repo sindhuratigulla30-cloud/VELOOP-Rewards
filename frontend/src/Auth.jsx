@@ -14,9 +14,10 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import "./Auth.css";
+import API_URL from "./api.js";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+// Remove trailing slashes from backend URL
+const BASE_URL = API_URL.replace(/\/+$/, "");
 
 function Auth({ mode = "login" }) {
   const isRegister = mode === "register";
@@ -82,7 +83,7 @@ function Auth({ mode = "login" }) {
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const response = await fetch(`${BASE_URL}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
