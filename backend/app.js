@@ -9,7 +9,7 @@ import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import giveawayRoutes from "./routes/giveawayRoutes.js";
-
+import winnerRoutes from "./routes/winnerRoutes.js";
 const app = express();
 
 // Allowed frontend URLs
@@ -102,7 +102,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/giveaways", giveawayRoutes);
-
+app.use("/api/winners", winnerRoutes);
 // Handle unknown routes
 app.use((req, res) => {
   res.status(404).json({

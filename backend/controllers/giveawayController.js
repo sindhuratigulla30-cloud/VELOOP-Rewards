@@ -266,7 +266,10 @@ export const getGiveawayById = async (req, res) => {
       });
     }
 
-    const giveaway = await Giveaway.findById(id);
+    const giveaway = await Giveaway.findOne({
+  _id: id,
+  status: { $ne: "draft" }
+});
 
     if (!giveaway) {
       return res.status(404).json({
