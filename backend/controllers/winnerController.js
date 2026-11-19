@@ -261,3 +261,49 @@ export const getGiveawayWinners = async (req, res) => {
     });
   }
 };
+
+// Get only the logged-in user's winning prizes.
+export const getMyWinners = async (req, res) => {
+  try {
+    const winners = await GiveawayWinner.find({
+      userId: req.user._id
+    })
+      .populate("giveawayId", "title")
+      .populate("prizeId", "name image category")
+      .sort({ selectedAt: -1 })
+      .lean();
+
+    const results = winners.map((item) => ({
+      winnerId: item._id,
+      giveaway: item.giveawayId
+        ? {
+            id: item.giveawayId._id,
+            title: item.giveawayId.title
+          }
+        : null,
+      prize: item.prizeId
+        ? {
+            id: item.prizeId._id,
+            name: item.prizeId.name,
+            image: item.prizeId.image,
+            category: item.prizeId.category
+          }
+        : null,
+      rank: item.rank,
+      selectedAt: item.selectedAt
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: results.length,
+      winners: results
+    });
+  } catch (error) {
+    console.error("My winners error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load your winning prizes."
+    });
+  }
+};

@@ -1,14 +1,17 @@
-
 import express from "express";
 
 import {
   selectGiveawayWinners,
-  getGiveawayWinners
+  getGiveawayWinners,
+  getMyWinners
 } from "../controllers/winnerController.js";
 
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+
+// Logged-in member: view only their own winning prizes.
+router.get("/my", protect, getMyWinners);
 
 // Public winner announcement.
 router.get("/:giveawayId", getGiveawayWinners);
