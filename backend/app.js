@@ -1,4 +1,4 @@
-
+﻿
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -10,6 +10,7 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import giveawayRoutes from "./routes/giveawayRoutes.js";
 import winnerRoutes from "./routes/winnerRoutes.js";
+import claimRoutes from "./routes/claimRoutes.js";
 const app = express();
 
 // Allowed frontend URLs
@@ -103,6 +104,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/giveaways", giveawayRoutes);
 app.use("/api/winners", winnerRoutes);
+app.use("/api/claims", claimRoutes);
 // Handle unknown routes
 app.use((req, res) => {
   res.status(404).json({
@@ -113,3 +115,4 @@ app.use((req, res) => {
 });
 
 export default app;
+
