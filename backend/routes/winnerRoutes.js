@@ -7,6 +7,7 @@ import {
 } from "../controllers/winnerController.js";
 
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
+import { fraudProtection } from "../middleware/fraudMiddleware.js";
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ router.post(
   "/:giveawayId/select",
   protect,
   adminOnly,
+  fraudProtection,
   selectGiveawayWinners
 );
 

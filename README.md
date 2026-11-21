@@ -45,6 +45,8 @@ VELOOP Rewards is developed using React for the frontend, Node.js and Express fo
 - View available prizes and entry information.
 - Authenticated giveaway participation.
 - Participation records stored in MongoDB.
+- Responsive giveaway status, countdown, prize cards, winner tabs, and winner announcement UI.
+- Currency-aware participation confirmation modal with balance and balance-after calculations.
 
 ### Wallet and Transaction History
 - Participation uses configured entry fees and supported reward currencies.
@@ -65,6 +67,12 @@ VELOOP Rewards is developed using React for the frontend, Node.js and Express fo
 - CORS configuration.
 - HTTP security headers using Helmet.
 - Request rate limiting.
+- Join and claim-specific rate limiting.
+- Idempotency-key protection for repeated participation requests.
+- Privacy-conscious hashed device/IP request context.
+- Dedicated fraud event and audit log models.
+- Masked public winner identifiers.
+- Centralized API error responses.
 - JSON request-size limit.
 - Database connection before API request processing.
 

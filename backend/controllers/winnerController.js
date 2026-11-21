@@ -6,6 +6,7 @@ import Giveaway from "../models/Giveaway.js";
 import GiveawayPrize from "../models/GiveawayPrize.js";
 import Participation from "../models/Participation.js";
 import GiveawayWinner from "../models/GiveawayWinner.js";
+import AuditLog from "../models/AuditLog.js";
 
 // Securely shuffle participants using Node.js crypto.
 const secureShuffle = (items) => {
@@ -164,6 +165,19 @@ export const selectGiveawayWinners = async (req, res) => {
       };
     });
 
+    await AuditLog.create({
+      userId: req.user?._id || null,
+      action: "WINNER_SELECTED",
+      giveawayId,
+      result: "success",
+      requestId: req.requestId,
+      ipHash: req.securityContext?.ipHash,
+      deviceHash: req.securityContext?.deviceHash,
+      details: {
+        totalWinners: result.totalWinners
+      }
+    }).catch(() => {});
+
     return res.status(200).json({
       success: true,
       message: "Giveaway winners selected successfully.",
@@ -172,6 +186,17 @@ export const selectGiveawayWinners = async (req, res) => {
 
   } catch (error) {
     console.error("Winner selection error:", error);
+
+    await AuditLog.create({
+      userId: req.user?._id || null,
+      action: "WINNER_SELECTION_FAILED",
+      giveawayId,
+      result: "failed",
+      requestId: req.requestId,
+      ipHash: req.securityContext?.ipHash,
+      deviceHash: req.securityContext?.deviceHash,
+      details: { errorCode: error.message || "UNKNOWN_ERROR" }
+    }).catch(() => {});
 
     const errors = {
       GIVEAWAY_NOT_FOUND: [404, "Giveaway not found."],
@@ -227,19 +252,24 @@ export const getGiveawayWinners = async (req, res) => {
     const winners = await GiveawayWinner.find({
       giveawayId: giveaway._id
     })
-      .populate("userId", "name")
+      .populate("userId", "_id")
       .populate("prizeId", "name image")
       .sort({ prizeId: 1, rank: 1 })
       .lean();
 
-    const results = winners.map((winner) => ({
+    const results = winners.map((winner) => {
+      const identifier = String(winner.userId?._id || "");
+      const suffix = identifier.slice(-4).toUpperCase();
+
+      return {
       winnerId: winner._id,
-      name: winner.userId?.name || "VELOOP Winner",
+      name: suffix ? `VE****${suffix}` : "VE****00",
       prize: winner.prizeId?.name || "Prize",
       prizeImage: winner.prizeId?.image || "",
       rank: winner.rank,
       selectedAt: winner.selectedAt
-    }));
+      };
+    });
 
     return res.status(200).json({
       success: true,

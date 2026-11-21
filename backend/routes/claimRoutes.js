@@ -8,12 +8,20 @@ import {
 } from "../controllers/claimController.js";
 
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
+import { claimRateLimit } from "../middleware/sensitiveRateLimit.js";
+import { fraudProtection } from "../middleware/fraudMiddleware.js";
 
 const router = express.Router();
 
 // Logged-in user
 router.get("/my", protect, getMyClaims);
-router.post("/:winnerId", protect, submitClaim);
+router.post(
+  "/:winnerId",
+  protect,
+  claimRateLimit,
+  fraudProtection,
+  submitClaim
+);
 
 // Admin only
 router.get("/", protect, adminOnly, getAllClaims);

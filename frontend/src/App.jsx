@@ -1,15 +1,26 @@
 
 import "./App.css";
-import { Link, Navigate, Routes, Route, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import {
+  Link,
+  Navigate,
+  Routes,
+  Route,
+  useLocation
+} from "react-router-dom";
+
 import GiveawayDetails from "./GiveawayDetails.jsx";
 import Auth from "./Auth.jsx";
 import UserDashboard from "./UserDashboard.jsx";
+import AdminDashboard from "./AdminDashboard.jsx";
 
 import iphoneImage from "./assets/iphone.png";
 import watchImage from "./assets/watch.png";
 import airpodsImage from "./assets/airpods.png";
 import amazonImage from "./assets/amazon.png";
 import giftBoxImage from "./assets/gift-box.png";
+import API_URL from "./api.js";
+import { giveawayDemoData } from "./data/giveawayData.js";
 
 import {
   Gift,
@@ -20,54 +31,97 @@ import {
   Trophy,
   Menu,
   Coins,
+  RefreshCw,
+  ChevronDown,
+  Scale,
+  Eye,
+  LockKeyhole,
 } from "lucide-react";
 
-const prizes = [
-  {
-    name: "iPhone",
-    detail: "Win the latest Apple smartphone",
-    fee: "250 VEs",
-    image: iphoneImage,
-    tag: "Popular",
-  },
-  {
-    name: "Apple Watch",
-    detail: "A smarter way to stay connected",
-    fee: "200 VEs",
-    image: watchImage,
-    tag: "Featured",
-  },
-  {
-    name: "AirPods",
-    detail: "Experience premium wireless audio",
-    fee: "500 SVEs",
-    image: airpodsImage,
-    tag: "Premium",
-  },
-  {
-    name: "Amazon Gift Card",
-    detail: "Shop your favourite products",
-    fee: "500 VEs",
-    image: amazonImage,
-    tag: "Gift card",
-  },
-  {
-    name: "₹500 Voucher",
-    detail: "A little reward for you",
-    fee: "300 VEs",
-    image: giftBoxImage,
-    tag: "Popular",
-  },
-  {
-    name: "₹20 Voucher",
-    detail: "Small rewards, exciting moments",
-    fee: "2,000 Tokens",
-    image: giftBoxImage,
-    tag: "Token reward",
-  },
+const prizeAssets = [
+  iphoneImage,
+  watchImage,
+  airpodsImage,
+  amazonImage,
+  giftBoxImage,
+  giftBoxImage
 ];
 
+function getCountdown(endDate) {
+  const distance = Math.max(
+    0,
+    new Date(endDate).getTime() - Date.now()
+  );
+
+  return {
+    days: Math.floor(distance / 86400000),
+    hours: Math.floor((distance / 3600000) % 24),
+    minutes: Math.floor((distance / 60000) % 60),
+    seconds: Math.floor((distance / 1000) % 60)
+  };
+}
+
 function HomePage() {
+  const [giveaway, setGiveaway] = useState(null);
+  const [prizes, setPrizes] = useState([]);
+  const [giveawayLoading, setGiveawayLoading] = useState(true);
+  const [giveawayError, setGiveawayError] = useState("");
+  const [winnerTab, setWinnerTab] = useState("current");
+  const [winnerSlideIndex, setWinnerSlideIndex] = useState(0);
+  const [openFaq, setOpenFaq] = useState(0);
+  const [countdown, setCountdown] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0
+  });
+
+  const loadGiveaway = async () => {
+    try {
+      setGiveawayLoading(true);
+      setGiveawayError("");
+
+      const response = await fetch(`${API_URL}/api/giveaways/current`);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Unable to load giveaway.");
+      }
+
+      setGiveaway(data.giveaway);
+      setPrizes(data.prizes || []);
+    } catch (error) {
+      setGiveaway(null);
+      setPrizes([]);
+      setGiveawayError(error.message || "Unable to load giveaway.");
+    } finally {
+      setGiveawayLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadGiveaway();
+  }, []);
+
+  useEffect(() => {
+    if (!giveaway?.endDate) return;
+
+    const updateCountdown = () => setCountdown(getCountdown(giveaway.endDate));
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [giveaway]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setWinnerSlideIndex((previous) =>
+        (previous + 1) % giveawayDemoData.winners.length
+      );
+    }, 4200);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <div className="app">
       <nav className="navbar">
@@ -163,10 +217,10 @@ function HomePage() {
                   </div>
                 </div>
 
-                <button className="enter-giveaway-btn">
+                <a className="enter-giveaway-btn" href="#giveaways">
                   Enter Giveaway
                   <ArrowRight size={18} />
-                </button>
+                </a>
               </div>
 
               <div className="giveaway-voucher-visual" aria-hidden="true">
@@ -185,32 +239,36 @@ function HomePage() {
           <div className="stat-item">
             <Gift />
             <div>
-              <strong>Exciting</strong>
-              <span>Prizes to discover</span>
+              <strong>{prizes.length || "—"}</strong>
+              <span>Available prizes</span>
             </div>
           </div>
 
           <div className="stat-item">
             <Ticket />
             <div>
-              <strong>Easy</strong>
-              <span>Giveaway participation</span>
+              <strong>{giveaway?.participantCount?.toLocaleString("en-IN") || "—"}</strong>
+              <span>Participants</span>
             </div>
           </div>
 
           <div className="stat-item">
             <ShieldCheck />
             <div>
-              <strong>Secure</strong>
-              <span>Account experience</span>
+              <strong>{giveaway?.status ? giveaway.status.toUpperCase() : "—"}</strong>
+              <span>Giveaway status</span>
             </div>
           </div>
 
           <div className="stat-item">
             <Trophy />
             <div>
-              <strong>Special</strong>
-              <span>Winner celebrations</span>
+              <strong>
+                {giveaway
+                  ? `${countdown.days}d ${countdown.hours}h ${countdown.minutes}m`
+                  : "—"}
+              </strong>
+              <span>Ends in</span>
             </div>
           </div>
         </section>
@@ -236,35 +294,144 @@ function HomePage() {
             </a>
           </div>
 
-          <div className="prize-grid">
-            {prizes.map((prize, index) => (
-              <article className="prize-card" key={prize.name}>
-                <div className="prize-top">
-                  <span className="prize-tag">{prize.tag}</span>
-                  <span className="prize-icon" aria-hidden="true">
-                    <img className="prize-image" src={prize.image} alt={prize.name} />
-                  </span>
-                </div>
+          {giveawayLoading ? (
+            <div className="giveaway-loader" role="status" aria-live="polite">
+              <div className="loader-gift">
+                <Gift size={28} />
+                <span></span>
+              </div>
+              <strong>Preparing today's rewards...</strong>
+            </div>
+          ) : giveawayError ? (
+            <div className="giveaway-empty-state" role="alert">
+              <h3>We couldn't load the giveaway information.</h3>
+              <p>Please check your connection and try again.</p>
+              <button type="button" className="primary-btn" onClick={loadGiveaway}>
+                Try Again <RefreshCw size={16} />
+              </button>
+            </div>
+          ) : prizes.length === 0 ? (
+            <div className="giveaway-empty-state">
+              <h3>No active giveaway is available</h3>
+              <p>The next reward event is being prepared.</p>
+            </div>
+          ) : (
+            <div className="prize-grid">
+              {prizes.map((prize, index) => (
+                <article className="prize-card" key={prize.prizeId || prize.name}>
+                  <div className="prize-top">
+                    <span className="prize-tag">
+                      {index === 0 ? "1st Prize" : `${index + 1}${index === 1 ? "nd" : index === 2 ? "rd" : " Prize"}`}
+                    </span>
 
-                <h3>{prize.name}</h3>
-                <p>{prize.detail}</p>
-
-                <div className="prize-footer">
-                  <div className="entry-fee">
-                    <Coins size={17} />
-                    <span>{prize.fee}</span>
+                    <span className="prize-icon" aria-hidden="true">
+                      <img
+                        className="prize-image"
+                        src={prizeAssets[index] || giftBoxImage}
+                        alt={prize.name}
+                      />
+                    </span>
                   </div>
 
-                  <Link
-                    className="join-btn"
-                    to={`/giveaway/${index}`}
-                  >
-                    View details <ArrowRight size={15} />
-                  </Link>
-                </div>
-              </article>
-            ))}
+                  <h3>{prize.name}</h3>
+                  <p>{prize.description}</p>
+
+                  <div className="prize-footer">
+                    <div className="entry-fee">
+                      <Coins size={17} />
+                      <span>{prize.entryFee.toLocaleString("en-IN")} {prize.currency}</span>
+                    </div>
+
+                    <Link
+                      className="join-btn"
+                      to={`/giveaway/${index}`}
+                    >
+                      View details <ArrowRight size={15} />
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="winners-section" id="winners">
+          <div className="winners-heading">
+            <div>
+              <div className="section-label">WINNER ANNOUNCEMENTS</div>
+              <h2>Reward <span>moments</span></h2>
+            </div>
+
+            <div className="winner-tabs" role="tablist" aria-label="Winner lists">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={winnerTab === "current"}
+                className={winnerTab === "current" ? "active" : ""}
+                onClick={() => setWinnerTab("current")}
+              >
+                Current Giveaway
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={winnerTab === "previous"}
+                className={winnerTab === "previous" ? "active" : ""}
+                onClick={() => setWinnerTab("previous")}
+              >
+                Previous Winners
+              </button>
+            </div>
           </div>
+
+          <div className="winner-announcement" aria-live="polite">
+            <Trophy size={18} />
+            <strong>{giveawayDemoData.winners[winnerSlideIndex].userId}</strong>
+            <span>
+              won {giveawayDemoData.winners[winnerSlideIndex].prize}
+            </span>
+            <small>Recent demo winner</small>
+          </div>
+
+          {winnerTab === "current" ? (
+            giveaway?.status === "ended" ? (
+              <div className="winner-list">
+                {giveawayDemoData.winners.map((winner) => (
+                  <article className="winner-card" key={`${winner.userId}-${winner.prize}`}>
+                    <div className="winner-avatar"><Trophy size={20} /></div>
+                    <div>
+                      <strong>{winner.userId}</strong>
+                      <span>Won {winner.prize}</span>
+                    </div>
+                    <time>{winner.date}</time>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="winner-pending">
+                <Trophy size={30} />
+                <div>
+                  <strong>Winners have not been finalized</strong>
+                  <p>Winner announcements will appear after the giveaway ends.</p>
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="winner-list">
+              {giveawayDemoData.previousWinners.map((winner) => (
+                <article className="winner-card" key={`${winner.userId}-${winner.prize}`}>
+                  <div className="winner-avatar"><Trophy size={20} /></div>
+                  <div>
+                    <strong>{winner.userId}</strong>
+                    <span>Won {winner.prize}</span>
+                    <small>{winner.giveaway}</small>
+                  </div>
+                  <time>{winner.date}</time>
+                </article>
+              ))}
+            </div>
+          )}
+          <p className="demo-note">Displayed winner examples are fictional demo data.</p>
         </section>
 
         <section className="how-section" id="how-it-works">
@@ -306,7 +473,65 @@ function HomePage() {
           </div>
         </section>
 
-        <section className="bottom-banner" id="winners">
+        <section className="trust-section" id="rules">
+          <div className="trust-copy">
+            <div className="section-label">TRANSPARENT REWARD EXPERIENCE</div>
+            <h2>Participation you can <span>understand</span></h2>
+            <p>
+              Every reward shows its entry requirement, eligibility conditions,
+              and claim process before you participate.
+            </p>
+          </div>
+
+          <div className="trust-grid">
+            <article>
+              <Scale size={22} />
+              <h3>Clear rules</h3>
+              <p>Entry fees and giveaway conditions are displayed before joining.</p>
+            </article>
+            <article>
+              <LockKeyhole size={22} />
+              <h3>Secure participation</h3>
+              <p>Authenticated account actions protect participation and prize claims.</p>
+            </article>
+            <article>
+              <Eye size={22} />
+              <h3>Reward transparency</h3>
+              <p>Prize quantities and winner announcements are presented clearly.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="faq-section">
+          <div className="faq-heading">
+            <div className="section-label">COMMON QUESTIONS</div>
+            <h2>Giveaway <span>FAQ</span></h2>
+          </div>
+
+          <div className="faq-list">
+            {[
+              ["How do I participate?", "Open a reward, review the entry fee and rules, then confirm participation from the individual giveaway page."],
+              ["How are winners selected?", "Winner selection and verification are controlled by VELOOP according to the completed giveaway's configured rules."],
+              ["When are winners announced?", "Winners appear after the giveaway ends and the announcement is finalized."],
+              ["What happens after I win?", "A winner can submit the required physical-delivery or gift-card claim details from their account."],
+              ["Can I participate in multiple giveaways?", "Participation rules apply per giveaway event. A new giveaway is a separate participation opportunity."]
+            ].map(([question, answer], index) => (
+              <article className={`faq-item ${openFaq === index ? "open" : ""}`} key={question}>
+                <button
+                  type="button"
+                  aria-expanded={openFaq === index}
+                  onClick={() => setOpenFaq(openFaq === index ? -1 : index)}
+                >
+                  <span>{question}</span>
+                  <ChevronDown size={18} />
+                </button>
+                {openFaq === index && <p>{answer}</p>}
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="bottom-banner">
           <div>
             <div className="section-label">
               YOUR NEXT REWARD STARTS HERE
@@ -340,9 +565,26 @@ function HomePage() {
   );
 }
 
-function ProtectedRoute({ children }) {
+// Read the authenticated user's information.
+function getStoredUser() {
+  try {
+    return JSON.parse(
+      localStorage.getItem("velopUser") || "null"
+    );
+  } catch {
+    return null;
+  }
+}
+
+// Protect dashboard routes.
+function ProtectedRoute({ children, requiredRole }) {
   const location = useLocation();
-  const hasToken = Boolean(localStorage.getItem("velopToken"));
+
+  const hasToken = Boolean(
+    localStorage.getItem("velopToken")
+  );
+
+  const user = getStoredUser();
 
   if (!hasToken) {
     return (
@@ -354,17 +596,30 @@ function ProtectedRoute({ children }) {
     );
   }
 
+  if (requiredRole && user?.role !== requiredRole) {
+    return (
+      <Navigate
+        to={user?.role === "admin" ? "/admin" : "/dashboard"}
+        replace
+      />
+    );
+  }
+
   return children;
 }
 
+// Redirect already logged-in users away from login/register.
 function GuestOnlyRoute({ children }) {
-  const location = useLocation();
-  const hasToken = Boolean(localStorage.getItem("velopToken"));
+  const hasToken = Boolean(
+    localStorage.getItem("velopToken")
+  );
+
+  const user = getStoredUser();
 
   if (hasToken) {
     return (
       <Navigate
-        to={location.state?.from || "/dashboard"}
+        to={user?.role === "admin" ? "/admin" : "/dashboard"}
         replace
       />
     );
@@ -376,7 +631,10 @@ function GuestOnlyRoute({ children }) {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route
+        path="/"
+        element={<HomePage />}
+      />
 
       <Route
         path="/giveaway/:id"
@@ -401,16 +659,30 @@ function App() {
         }
       />
 
+      {/* Normal user dashboard */}
       <Route
         path="/dashboard"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="user">
             <UserDashboard />
           </ProtectedRoute>
         }
       />
 
-      <Route path="*" element={<HomePage />} />
+      {/* Separate admin dashboard */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="*"
+        element={<HomePage />}
+      />
     </Routes>
   );
 }

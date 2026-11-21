@@ -24,8 +24,6 @@ function Auth({ mode = "login" }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const redirectTo = location.state?.from || "/dashboard";
-
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -105,6 +103,13 @@ function Auth({ mode = "login" }) {
         );
       }
 
+      if (!data.user || !data.user.role) {
+        throw new Error(
+          "User information or account role was not returned by the server."
+        );
+      }
+
+      // Save authentication details
       localStorage.setItem("velopToken", data.token);
       localStorage.setItem(
         "velopUser",
@@ -117,7 +122,23 @@ function Auth({ mode = "login" }) {
           : "Login successful! Welcome back."
       );
 
+      // Redirect according to account role
+      const defaultDestination =
+        data.user.role === "admin"
+          ? "/admin"
+          : "/dashboard";
+
+      const requestedPath = location.state?.from;
+
+      const redirectTo =
+        requestedPath &&
+        requestedPath !== "/admin" &&
+        requestedPath !== "/dashboard"
+          ? requestedPath
+          : defaultDestination;
+
       navigate(redirectTo, { replace: true });
+
     } catch (err) {
       setError(
         err.message || "Unable to connect to the VELOOP server."

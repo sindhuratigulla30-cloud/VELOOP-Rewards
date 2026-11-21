@@ -11,11 +11,25 @@ import {
   ShieldCheck,
   Coins,
   CheckCircle,
+  Gift,
 } from "lucide-react";
 import "./GiveawayDetails.css";
 import API_URL from "./api.js";
+import { giveawayDemoData } from "./data/giveawayData.js";
+import iphoneImage from "./assets/iphone.png";
+import watchImage from "./assets/watch.png";
+import airpodsImage from "./assets/airpods.png";
+import amazonImage from "./assets/amazon.png";
+import giftBoxImage from "./assets/gift-box.png";
 
-const prizeIcons = ["📱", "⌚", "🎧", "🎁", "💳", "🎟️"];
+const prizeImages = [
+  iphoneImage,
+  watchImage,
+  airpodsImage,
+  amazonImage,
+  giftBoxImage,
+  giftBoxImage
+];
 
 function GiveawayDetails() {
   const { id } = useParams();
@@ -28,6 +42,7 @@ function GiveawayDetails() {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState(null);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,12 +103,13 @@ function GiveawayDetails() {
     }
 
     if (!giveaway || !prize) return;
+    setConfirmationOpen(true);
+  };
 
-    const confirmed = window.confirm(
-      `Join ${prize.name} giveaway for ${prize.entryFee} ${prize.currency}?`
-    );
+  const confirmJoin = async () => {
+    const token = localStorage.getItem("velopToken");
 
-    if (!confirmed) return;
+    if (!token || !giveaway || !prize) return;
 
     try {
       setJoining(true);
@@ -106,6 +122,7 @@ function GiveawayDetails() {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            "Idempotency-Key": `${giveaway._id}-${prize.prizeId}-${token.slice(-12)}`
           },
           body: JSON.stringify({
             prizeId: prize.prizeId,
@@ -127,6 +144,7 @@ function GiveawayDetails() {
           `${data.message}. Remaining ${data.data.currency}: ` +
           data.data.remainingBalance,
       });
+      setConfirmationOpen(false);
     } catch (err) {
       if (
         err.message.toLowerCase().includes("token") ||
@@ -152,8 +170,14 @@ function GiveawayDetails() {
 
   if (loading) {
     return (
-      <main className="details-page">
-        <p>Loading giveaway details...</p>
+      <main className="details-page details-loading">
+        <div className="giveaway-loader" role="status" aria-live="polite">
+          <div className="loader-gift">
+            <Gift size={28} />
+            <span></span>
+          </div>
+          <strong>Loading available prizes...</strong>
+        </div>
       </main>
     );
   }
@@ -187,6 +211,12 @@ function GiveawayDetails() {
 
   const rules = giveaway.rules || [];
   const terms = giveaway.termsAndConditions || [];
+  const balance = Number(
+    giveawayDemoData.balances[prize.currency] || 0
+  );
+  const entryFee = Number(prize.entryFee);
+  const sufficientBalance = balance >= entryFee;
+  const balanceAfter = Math.max(0, balance - entryFee);
 
   return (
     <main className="details-page">
@@ -198,7 +228,10 @@ function GiveawayDetails() {
       <div className="details-layout">
         <section className="details-prize-card">
           <div className="details-prize-icon">
-            {prizeIcons[prizeIndex] || "🎁"}
+            <img
+              src={prizeImages[prizeIndex] || giftBoxImage}
+              alt={prize.name}
+            />
           </div>
 
           <span className="details-status">
@@ -221,18 +254,37 @@ function GiveawayDetails() {
             </div>
           </div>
 
+          <div className={`balance-status ${sufficientBalance ? "sufficient" : "insufficient"}`}>
+            <ShieldCheck size={17} />
+            <div>
+              <small>Your Balance</small>
+              <strong>{balance.toLocaleString("en-IN")} {prize.currency}</strong>
+              <span>
+                {sufficientBalance
+                  ? `Enough ${prize.currency} available`
+                  : `Need ${(entryFee - balance).toLocaleString("en-IN")} more ${prize.currency}`}
+              </span>
+            </div>
+          </div>
+
           <button
             className="details-join-button"
             onClick={handleJoin}
-            disabled={joining || giveaway.status !== "active"}
+            disabled={
+              joining ||
+              giveaway.status !== "active" ||
+              !sufficientBalance
+            }
           >
             {joining
               ? "Joining..."
               : giveaway.status !== "active"
                 ? "Giveaway Closed"
-                : localStorage.getItem("velopToken")
-                  ? "Join Giveaway"
-                  : "Login to Participate"}
+                : !sufficientBalance
+                  ? `Earn More ${prize.currency}`
+                  : localStorage.getItem("velopToken")
+                    ? `Join for ${entryFee.toLocaleString("en-IN")} ${prize.currency}`
+                    : "Login to Participate"}
           </button>
 
           {feedback && (
@@ -295,6 +347,26 @@ function GiveawayDetails() {
           </div>
 
           <div className="information-card">
+            <h2>How This Giveaway Works</h2>
+            <ol className="giveaway-timeline">
+              <li><span>01</span>Review the prize and entry fee</li>
+              <li><span>02</span>Check your account eligibility</li>
+              <li><span>03</span>Confirm participation and fee</li>
+              <li><span>04</span>Wait until the giveaway ends</li>
+              <li><span>05</span>Claim if you are selected</li>
+            </ol>
+          </div>
+
+          <div className="information-card">
+            <h2>About the Prize</h2>
+            <p>{prize.description}</p>
+            <p>
+              Claim requirements depend on whether this is a physical prize,
+              digital reward, or gift card.
+            </p>
+          </div>
+
+          <div className="information-card">
             <h2>Terms and Conditions</h2>
             {terms.length > 0 ? (
               <ul>
@@ -311,6 +383,74 @@ function GiveawayDetails() {
           </div>
         </section>
       </div>
+
+      {confirmationOpen && (
+        <div
+          className="claim-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setConfirmationOpen(false);
+            }
+          }}
+        >
+          <section
+            className="claim-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-participation-title"
+          >
+            <button
+              type="button"
+              className="modal-close"
+              aria-label="Close confirmation"
+              onClick={() => setConfirmationOpen(false)}
+            >
+              ×
+            </button>
+            <span className="section-label">CONFIRM PARTICIPATION</span>
+            <h2 id="confirm-participation-title">{prize.name}</h2>
+
+            <div className="confirmation-grid">
+              <div>
+                <small>Entry Fee</small>
+                <strong>{entryFee.toLocaleString("en-IN")} {prize.currency}</strong>
+              </div>
+              <div>
+                <small>Your Balance</small>
+                <strong>{balance.toLocaleString("en-IN")} {prize.currency}</strong>
+              </div>
+              <div>
+                <small>Balance After Joining</small>
+                <strong>{balanceAfter.toLocaleString("en-IN")} {prize.currency}</strong>
+              </div>
+            </div>
+
+            <p className="confirmation-note">
+              By continuing, you confirm that you have reviewed the giveaway
+              rules and terms.
+            </p>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="modal-cancel"
+                onClick={() => setConfirmationOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="details-join-button"
+                onClick={confirmJoin}
+                disabled={joining}
+              >
+                {joining ? "Joining Giveaway..." : "Confirm & Join"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

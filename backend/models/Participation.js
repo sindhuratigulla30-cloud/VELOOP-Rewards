@@ -42,6 +42,16 @@ const participationSchema = new mongoose.Schema(
     joinedAt: {
       type: Date,
       default: Date.now
+    },
+    idempotencyKey: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    deviceHash: {
+      type: String,
+      trim: true,
+      default: ""
     }
   },
   {
@@ -53,6 +63,10 @@ const participationSchema = new mongoose.Schema(
 participationSchema.index(
   { userId: 1, giveawayId: 1 },
   { unique: true }
+);
+participationSchema.index(
+  { idempotencyKey: 1 },
+  { unique: true, sparse: true }
 );
 
 const Participation = mongoose.model(

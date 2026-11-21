@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import PrizeClaim from "../models/PrizeClaim.js";
 import GiveawayWinner from "../models/GiveawayWinner.js";
+import AuditLog from "../models/AuditLog.js";
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -141,12 +142,36 @@ export const submitClaim = async (req, res) => {
       ...details
     });
 
+    await AuditLog.create({
+      userId: req.user._id,
+      action: "CLAIM_SUBMITTED",
+      giveawayId: winner.giveawayId._id,
+      prizeId: winner.prizeId._id,
+      result: "success",
+      requestId: req.securityContext?.requestId,
+      ipHash: req.securityContext?.ipHash,
+      deviceHash: req.securityContext?.deviceHash,
+      details: { claimType }
+    }).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: "Prize claim submitted successfully.",
       claim
     });
   } catch (error) {
+    await AuditLog.create({
+      userId: req.user?._id || null,
+      action: "CLAIM_REJECTED",
+      result: "rejected",
+      requestId: req.securityContext?.requestId,
+      ipHash: req.securityContext?.ipHash,
+      deviceHash: req.securityContext?.deviceHash,
+      details: {
+        errorCode: error.code || error.message || "UNKNOWN_ERROR"
+      }
+    }).catch(() => {});
+
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -334,6 +359,18 @@ export const updateClaimStatus = async (req, res) => {
         message: "Claim was updated by another administrator. Refresh and try again."
       });
     }
+
+    await AuditLog.create({
+      userId: req.user._id,
+      action: "CLAIM_STATUS_UPDATED",
+      giveawayId: claim.giveawayId,
+      prizeId: claim.prizeId,
+      result: "success",
+      requestId: req.securityContext?.requestId,
+      ipHash: req.securityContext?.ipHash,
+      deviceHash: req.securityContext?.deviceHash,
+      details: { claimId: claim._id, status }
+    }).catch(() => {});
 
     return res.status(200).json({
       success: true,

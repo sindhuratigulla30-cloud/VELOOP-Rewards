@@ -23,7 +23,7 @@ const walletTransactionSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["credit", "debit", "refund"],
+      enum: ["credit", "debit", "refund", "reversal"],
       required: true
     },
 
@@ -52,7 +52,7 @@ const walletTransactionSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["completed", "pending", "failed"],
+      enum: ["completed", "pending", "failed", "reversed"],
       default: "completed"
     }
   },

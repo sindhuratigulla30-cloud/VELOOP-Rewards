@@ -7,11 +7,22 @@ import Giveaway from "../models/Giveaway.js";
 import GiveawayPrize from "../models/GiveawayPrize.js";
 import Participation from "../models/Participation.js";
 import WalletTransaction from "../models/WalletTransaction.js";
+import AuditLog from "../models/AuditLog.js";
+
+const writeAuditLog = async (data) => {
+  await AuditLog.create(data).catch((error) => {
+    console.error("Audit log write failed:", error.message);
+  });
+};
 
 // Join a giveaway
 export const joinGiveaway = async (req, res) => {
   const { giveawayId } = req.params;
   const { prizeId } = req.body || {};
+  const idempotencyKey =
+    typeof req.headers["idempotency-key"] === "string"
+      ? req.headers["idempotency-key"].trim()
+      : "";
 
   if (
     !mongoose.Types.ObjectId.isValid(giveawayId) ||
@@ -28,6 +39,32 @@ export const joinGiveaway = async (req, res) => {
       success: false,
       message: "Please log in to participate."
     });
+  }
+
+  if (idempotencyKey) {
+    const replayed = await Participation.findOne({
+      userId: req.user._id,
+      giveawayId,
+      prizeId,
+      idempotencyKey
+    })
+      .populate("prizeId", "name")
+      .lean();
+
+    if (replayed) {
+      return res.status(200).json({
+        success: true,
+        message: "Giveaway participation already recorded.",
+        data: {
+          participationId: replayed._id,
+          prizeName: replayed.prizeId?.name || "Giveaway prize",
+          entryFee: replayed.entryFee,
+          currency: replayed.currency,
+          remainingBalance: null,
+          replayed: true
+        }
+      });
+    }
   }
 
   const session = await mongoose.startSession();
@@ -119,7 +156,9 @@ export const joinGiveaway = async (req, res) => {
             entryFee,
             currency,
             status: "joined",
-            joinedAt: now
+            joinedAt: now,
+            idempotencyKey: idempotencyKey || null,
+            deviceHash: req.securityContext?.deviceHash || ""
           }
         ],
         { session }
@@ -152,6 +191,19 @@ export const joinGiveaway = async (req, res) => {
       };
     });
 
+    await writeAuditLog({
+      userId: req.user._id,
+      action: "JOIN_GIVEAWAY",
+      giveawayId,
+      prizeId,
+      amount: result.entryFee,
+      currency: result.currency,
+      result: "success",
+      requestId: req.securityContext?.requestId,
+      ipHash: req.securityContext?.ipHash,
+      deviceHash: req.securityContext?.deviceHash
+    });
+
     return res.status(201).json({
       success: true,
       message: "Successfully joined the giveaway",
@@ -161,21 +213,34 @@ export const joinGiveaway = async (req, res) => {
   } catch (error) {
     console.error("Join giveaway error:", error);
 
+    await writeAuditLog({
+      userId: req.user?._id || null,
+      action: "JOIN_REJECTED",
+      giveawayId,
+      prizeId,
+      result: "rejected",
+      requestId: req.securityContext?.requestId,
+      ipHash: req.securityContext?.ipHash,
+      deviceHash: req.securityContext?.deviceHash,
+      details: { errorCode: error.message || "UNKNOWN_ERROR" }
+    });
+
     const errors = {
-      GIVEAWAY_NOT_FOUND: [404, "Giveaway not found."],
-      GIVEAWAY_NOT_ACTIVE: [400, "This giveaway is not currently active."],
-      PRIZE_NOT_AVAILABLE: [404, "This prize is not available."],
-      USER_NOT_ACTIVE: [403, "Your account is not active."],
-      ALREADY_JOINED: [409, "You have already joined this giveaway."],
-      INSUFFICIENT_BALANCE: [400, "Insufficient wallet balance."],
-      INVALID_CURRENCY: [400, "Invalid prize entry fee or currency."]
+      GIVEAWAY_NOT_FOUND: [404, "GIVEAWAY_NOT_FOUND", "Giveaway not found."],
+      GIVEAWAY_NOT_ACTIVE: [400, "GIVEAWAY_NOT_ACTIVE", "This giveaway is not currently active."],
+      PRIZE_NOT_AVAILABLE: [404, "PRIZE_NOT_AVAILABLE", "This prize is not available."],
+      USER_NOT_ACTIVE: [403, "USER_NOT_ACTIVE", "Your account is not active."],
+      ALREADY_JOINED: [409, "ALREADY_PARTICIPATING", "You have already joined this giveaway."],
+      INSUFFICIENT_BALANCE: [400, "INSUFFICIENT_BALANCE", "Insufficient wallet balance."],
+      INVALID_CURRENCY: [400, "INVALID_CURRENCY", "Invalid prize entry fee or currency."]
     };
 
     if (errors[error.message]) {
-      const [statusCode, message] = errors[error.message];
+      const [statusCode, code, message] = errors[error.message];
 
       return res.status(statusCode).json({
         success: false,
+        code,
         message
       });
     }
@@ -203,11 +268,10 @@ export const getCurrentGiveaway = async (req, res) => {
   try {
     const now = new Date();
 
-    const giveaway = await Giveaway.findOne({
+    let giveaway = await Giveaway.findOne({
       status: "active",
-      startDate: { $lte: now },
-      endDate: { $gte: now }
-    });
+      startDate: { $lte: now }
+    }).sort({ startDate: -1 });
 
     if (!giveaway) {
       return res.status(404).json({
@@ -216,12 +280,28 @@ export const getCurrentGiveaway = async (req, res) => {
       });
     }
 
+    if (now > new Date(giveaway.endDate)) {
+      const updated = await Giveaway.findOneAndUpdate(
+        { _id: giveaway._id, status: "active" },
+        { $set: { status: "ended" } },
+        { new: true }
+      );
+
+      if (updated) {
+        giveaway = updated;
+      }
+    }
+
     const giveawayPrizes = await GiveawayPrize.find({
       giveawayId: giveaway._id,
       isAvailable: true
     })
       .populate("prizeId")
       .sort({ displayOrder: 1 });
+
+    const participantCount = await Participation.countDocuments({
+      giveawayId: giveaway._id
+    });
 
     const prizes = giveawayPrizes
       .filter((item) => item.prizeId && item.prizeId.isActive)
@@ -240,6 +320,7 @@ export const getCurrentGiveaway = async (req, res) => {
     return res.status(200).json({
       success: true,
       giveaway,
+      participantCount,
       prizes
     });
 
@@ -266,16 +347,27 @@ export const getGiveawayById = async (req, res) => {
       });
     }
 
-    const giveaway = await Giveaway.findOne({
-  _id: id,
-  status: { $ne: "draft" }
-});
+    let giveaway = await Giveaway.findOne({
+      _id: id,
+      status: { $ne: "draft" }
+    });
 
     if (!giveaway) {
       return res.status(404).json({
         success: false,
         message: "Giveaway not found."
       });
+    }
+
+    if (
+      giveaway.status === "active" &&
+      new Date(giveaway.endDate) < new Date()
+    ) {
+      giveaway = await Giveaway.findOneAndUpdate(
+        { _id: giveaway._id, status: "active" },
+        { $set: { status: "ended" } },
+        { new: true }
+      ) || giveaway;
     }
 
     const giveawayPrizes = await GiveawayPrize.find({
@@ -311,6 +403,65 @@ export const getGiveawayById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to load giveaway."
+    });
+  }
+};
+
+
+// Get the authenticated user's participation status for a giveaway.
+export const getMyGiveawayStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_GIVEAWAY",
+        message: "Invalid giveaway ID."
+      });
+    }
+
+    const giveaway = await Giveaway.findById(id)
+      .select("title status startDate endDate");
+
+    if (!giveaway) {
+      return res.status(404).json({
+        success: false,
+        code: "GIVEAWAY_NOT_FOUND",
+        message: "Giveaway not found."
+      });
+    }
+
+    const participation = await Participation.findOne({
+      userId: req.user._id,
+      giveawayId: giveaway._id
+    })
+      .populate("prizeId", "name")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      giveaway: {
+        id: giveaway._id,
+        title: giveaway.title,
+        status: giveaway.status
+      },
+      participating: Boolean(participation),
+      participation: participation
+        ? {
+            id: participation._id,
+            prize: participation.prizeId?.name || "Giveaway prize",
+            status: participation.status,
+            joinedAt: participation.joinedAt
+          }
+        : null
+    });
+  } catch (error) {
+    console.error("Get my giveaway status error:", error);
+    return res.status(500).json({
+      success: false,
+      code: "STATUS_LOAD_FAILED",
+      message: "Unable to load giveaway status."
     });
   }
 };

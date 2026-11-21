@@ -11,6 +11,7 @@ import userRoutes from "./routes/userRoutes.js";
 import giveawayRoutes from "./routes/giveawayRoutes.js";
 import winnerRoutes from "./routes/winnerRoutes.js";
 import claimRoutes from "./routes/claimRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 const app = express();
 
 // Allowed frontend URLs
@@ -49,7 +50,10 @@ const corsOptions = {
 
   allowedHeaders: [
     "Content-Type",
-    "Authorization"
+    "Authorization",
+    "Idempotency-Key",
+    "X-Request-ID",
+    "X-Device-ID"
   ],
 
   credentials: true,
@@ -105,12 +109,36 @@ app.use("/api/users", userRoutes);
 app.use("/api/giveaways", giveawayRoutes);
 app.use("/api/winners", winnerRoutes);
 app.use("/api/claims", claimRoutes);
+app.use("/api/admin", adminRoutes);
 // Handle unknown routes
 app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "API route not found",
     path: req.originalUrl
+  });
+});
+
+// Centralized Express error responses.
+app.use((error, req, res, next) => {
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  const corsRejected =
+    error.message === "Not allowed by CORS";
+
+  console.error(
+    corsRejected ? "CORS request rejected:" : "Unhandled API error:",
+    corsRejected ? req.headers.origin : error.message
+  );
+
+  return res.status(corsRejected ? 403 : 500).json({
+    success: false,
+    code: corsRejected ? "CORS_NOT_ALLOWED" : "INTERNAL_SERVER_ERROR",
+    message: corsRejected
+      ? "This origin is not allowed."
+      : "The server couldn't complete the request."
   });
 });
 
