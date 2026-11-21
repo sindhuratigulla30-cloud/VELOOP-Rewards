@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import "./GiveawayDetails.css";
 import API_URL from "./api.js";
-import { giveawayDemoData } from "./data/giveawayData.js";
 import iphoneImage from "./assets/iphone.png";
 import watchImage from "./assets/watch.png";
 import airpodsImage from "./assets/airpods.png";
@@ -28,7 +27,7 @@ const prizeImages = [
   airpodsImage,
   amazonImage,
   giftBoxImage,
-  giftBoxImage
+  giftBoxImage,
 ];
 
 function GiveawayDetails() {
@@ -37,6 +36,9 @@ function GiveawayDetails() {
   const navigate = useNavigate();
 
   const [giveaway, setGiveaway] = useState(null);
+  const [wallet, setWallet] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState("");
   const [prizes, setPrizes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -44,6 +46,7 @@ function GiveawayDetails() {
   const [feedback, setFeedback] = useState(null);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
 
+  // Fetch current giveaway and prizes.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -83,6 +86,66 @@ function GiveawayDetails() {
     return () => controller.abort();
   }, []);
 
+  // Fetch the actual logged-in user's wallet.
+  useEffect(() => {
+    const token = localStorage.getItem("velopToken");
+
+    if (!token) {
+      setWallet(null);
+      setWalletLoading(false);
+      setWalletError("");
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchWallet() {
+      try {
+        setWalletLoading(true);
+        setWalletError("");
+
+        const response = await fetch(
+          `${API_URL}/api/users/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message || "Unable to load wallet."
+          );
+        }
+
+        if (!data.user || !data.user.wallet) {
+          throw new Error("Wallet information is unavailable.");
+        }
+
+        setWallet(data.user.wallet);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          setWalletError(
+            err.message || "Unable to load wallet."
+          );
+          setWallet(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setWalletLoading(false);
+        }
+      }
+    }
+
+    fetchWallet();
+
+    return () => controller.abort();
+  }, []);
+
   const prizeIndex = Number(id);
 
   const validIndex =
@@ -92,7 +155,8 @@ function GiveawayDetails() {
 
   const prize = validIndex ? prizes[prizeIndex] : null;
 
-  const handleJoin = async () => {
+  // Open login or participation confirmation.
+  const handleJoin = () => {
     const token = localStorage.getItem("velopToken");
 
     if (!token) {
@@ -102,14 +166,17 @@ function GiveawayDetails() {
       return;
     }
 
-    if (!giveaway || !prize) return;
+    if (!giveaway || !prize || !wallet) return;
+    if (walletLoading || walletError || !sufficientBalance) return;
+
     setConfirmationOpen(true);
   };
 
+  // Confirm and join the giveaway.
   const confirmJoin = async () => {
     const token = localStorage.getItem("velopToken");
 
-    if (!token || !giveaway || !prize) return;
+    if (!token || !giveaway || !prize || !wallet) return;
 
     try {
       setJoining(true);
@@ -122,7 +189,7 @@ function GiveawayDetails() {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
-            "Idempotency-Key": `${giveaway._id}-${prize.prizeId}-${token.slice(-12)}`
+            "Idempotency-Key": `${giveaway._id}-${prize.prizeId}-${token.slice(-12)}`,
           },
           body: JSON.stringify({
             prizeId: prize.prizeId,
@@ -138,12 +205,19 @@ function GiveawayDetails() {
         );
       }
 
+      // Update the displayed wallet after successful participation.
+      setWallet((previousWallet) => ({
+        ...previousWallet,
+        [data.data.currency]: data.data.remainingBalance,
+      }));
+
       setFeedback({
         type: "success",
         message:
           `${data.message}. Remaining ${data.data.currency}: ` +
           data.data.remainingBalance,
       });
+
       setConfirmationOpen(false);
     } catch (err) {
       if (
@@ -171,7 +245,11 @@ function GiveawayDetails() {
   if (loading) {
     return (
       <main className="details-page details-loading">
-        <div className="giveaway-loader" role="status" aria-live="polite">
+        <div
+          className="giveaway-loader"
+          role="status"
+          aria-live="polite"
+        >
           <div className="loader-gift">
             <Gift size={28} />
             <span></span>
@@ -211,12 +289,18 @@ function GiveawayDetails() {
 
   const rules = giveaway.rules || [];
   const terms = giveaway.termsAndConditions || [];
-  const balance = Number(
-    giveawayDemoData.balances[prize.currency] || 0
-  );
+
+  // Use the actual wallet balance, never demo data.
+  const balance = Number(wallet?.[prize.currency] ?? 0);
   const entryFee = Number(prize.entryFee);
   const sufficientBalance = balance >= entryFee;
   const balanceAfter = Math.max(0, balance - entryFee);
+
+  const canJoin =
+    !!wallet &&
+    !walletLoading &&
+    !walletError &&
+    sufficientBalance;
 
   return (
     <main className="details-page">
@@ -248,21 +332,42 @@ function GiveawayDetails() {
             <div>
               <small>ENTRY FEE</small>
               <strong>
-                {Number(prize.entryFee).toLocaleString("en-IN")}{" "}
+                {entryFee.toLocaleString("en-IN")}{" "}
                 {prize.currency}
               </strong>
             </div>
           </div>
 
-          <div className={`balance-status ${sufficientBalance ? "sufficient" : "insufficient"}`}>
+          <div
+            className={`balance-status ${
+              canJoin ? "sufficient" : "insufficient"
+            }`}
+          >
             <ShieldCheck size={17} />
+
             <div>
               <small>Your Balance</small>
-              <strong>{balance.toLocaleString("en-IN")} {prize.currency}</strong>
+
+              <strong>
+                {walletLoading
+                  ? "Loading..."
+                  : walletError
+                    ? "Unavailable"
+                    : wallet
+                      ? `${balance.toLocaleString("en-IN")} ${prize.currency}`
+                      : `0 ${prize.currency}`}
+              </strong>
+
               <span>
-                {sufficientBalance
-                  ? `Enough ${prize.currency} available`
-                  : `Need ${(entryFee - balance).toLocaleString("en-IN")} more ${prize.currency}`}
+                {walletLoading
+                  ? "Checking your wallet balance..."
+                  : walletError
+                    ? "Unable to verify wallet balance."
+                    : !wallet
+                      ? "Login to view your wallet balance."
+                      : sufficientBalance
+                        ? `Enough ${prize.currency} available`
+                        : `Need ${(entryFee - balance).toLocaleString("en-IN")} more ${prize.currency}`}
               </span>
             </div>
           </div>
@@ -272,6 +377,9 @@ function GiveawayDetails() {
             onClick={handleJoin}
             disabled={
               joining ||
+              walletLoading ||
+              !!walletError ||
+              !wallet ||
               giveaway.status !== "active" ||
               !sufficientBalance
             }
@@ -280,11 +388,15 @@ function GiveawayDetails() {
               ? "Joining..."
               : giveaway.status !== "active"
                 ? "Giveaway Closed"
-                : !sufficientBalance
-                  ? `Earn More ${prize.currency}`
-                  : localStorage.getItem("velopToken")
-                    ? `Join for ${entryFee.toLocaleString("en-IN")} ${prize.currency}`
-                    : "Login to Participate"}
+                : walletLoading
+                  ? "Checking Balance..."
+                  : walletError
+                    ? "Wallet Unavailable"
+                    : !wallet
+                      ? "Login to Participate"
+                      : !sufficientBalance
+                        ? `Earn More ${prize.currency}`
+                        : `Join for ${entryFee.toLocaleString("en-IN")} ${prize.currency}`}
           </button>
 
           {feedback && (
@@ -361,13 +473,14 @@ function GiveawayDetails() {
             <h2>About the Prize</h2>
             <p>{prize.description}</p>
             <p>
-              Claim requirements depend on whether this is a physical prize,
-              digital reward, or gift card.
+              Claim requirements depend on whether this is a physical
+              prize, digital reward, or gift card.
             </p>
           </div>
 
           <div className="information-card">
             <h2>Terms and Conditions</h2>
+
             {terms.length > 0 ? (
               <ul>
                 {terms.map((term, index) => (
@@ -408,27 +521,44 @@ function GiveawayDetails() {
             >
               ×
             </button>
-            <span className="section-label">CONFIRM PARTICIPATION</span>
-            <h2 id="confirm-participation-title">{prize.name}</h2>
+
+            <span className="section-label">
+              CONFIRM PARTICIPATION
+            </span>
+
+            <h2 id="confirm-participation-title">
+              {prize.name}
+            </h2>
 
             <div className="confirmation-grid">
               <div>
                 <small>Entry Fee</small>
-                <strong>{entryFee.toLocaleString("en-IN")} {prize.currency}</strong>
+                <strong>
+                  {entryFee.toLocaleString("en-IN")}{" "}
+                  {prize.currency}
+                </strong>
               </div>
+
               <div>
                 <small>Your Balance</small>
-                <strong>{balance.toLocaleString("en-IN")} {prize.currency}</strong>
+                <strong>
+                  {balance.toLocaleString("en-IN")}{" "}
+                  {prize.currency}
+                </strong>
               </div>
+
               <div>
                 <small>Balance After Joining</small>
-                <strong>{balanceAfter.toLocaleString("en-IN")} {prize.currency}</strong>
+                <strong>
+                  {balanceAfter.toLocaleString("en-IN")}{" "}
+                  {prize.currency}
+                </strong>
               </div>
             </div>
 
             <p className="confirmation-note">
-              By continuing, you confirm that you have reviewed the giveaway
-              rules and terms.
+              By continuing, you confirm that you have reviewed
+              the giveaway rules and terms.
             </p>
 
             <div className="modal-actions">
@@ -439,13 +569,16 @@ function GiveawayDetails() {
               >
                 Cancel
               </button>
+
               <button
                 type="button"
                 className="details-join-button"
                 onClick={confirmJoin}
-                disabled={joining}
+                disabled={joining || !canJoin}
               >
-                {joining ? "Joining Giveaway..." : "Confirm & Join"}
+                {joining
+                  ? "Joining Giveaway..."
+                  : "Confirm & Join"}
               </button>
             </div>
           </section>
