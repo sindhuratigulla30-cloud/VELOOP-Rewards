@@ -12,12 +12,14 @@ import giveawayRoutes from "./routes/giveawayRoutes.js";
 import winnerRoutes from "./routes/winnerRoutes.js";
 import claimRoutes from "./routes/claimRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+
 const app = express();
 
 // Allowed frontend URLs
 const allowedOrigins = [
   "https://veloop-rewards-frontend.vercel.app",
   "http://localhost:5173",
+  "http://localhost:5174",
   ...(process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",")
     : [])
@@ -110,6 +112,7 @@ app.use("/api/giveaways", giveawayRoutes);
 app.use("/api/winners", winnerRoutes);
 app.use("/api/claims", claimRoutes);
 app.use("/api/admin", adminRoutes);
+
 // Handle unknown routes
 app.use((req, res) => {
   res.status(404).json({
@@ -119,7 +122,7 @@ app.use((req, res) => {
   });
 });
 
-// Centralized Express error responses.
+// Centralized Express error responses
 app.use((error, req, res, next) => {
   if (res.headersSent) {
     return next(error);
@@ -143,4 +146,3 @@ app.use((error, req, res, next) => {
 });
 
 export default app;
-
