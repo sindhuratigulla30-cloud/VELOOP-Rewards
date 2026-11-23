@@ -37,6 +37,11 @@ function GiveawayDetails() {
 
   const [giveaway, setGiveaway] = useState(null);
   const [wallet, setWallet] = useState(null);
+
+  const [participating, setParticipating] = useState(false);
+  const [participationLoading, setParticipationLoading] = useState(false);
+  const [participationError, setParticipationError] = useState("");
+
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState("");
   const [prizes, setPrizes] = useState([]);
@@ -85,6 +90,61 @@ function GiveawayDetails() {
 
     return () => controller.abort();
   }, []);
+
+  // Check whether the logged-in user has already joined this giveaway.
+  useEffect(() => {
+    const token = localStorage.getItem("velopToken");
+
+    if (!giveaway?._id || !token) {
+      setParticipating(false);
+      setParticipationLoading(false);
+      setParticipationError("");
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchParticipationStatus() {
+      try {
+        setParticipationLoading(true);
+        setParticipationError("");
+
+        const response = await fetch(
+          `${API_URL}/api/giveaways/${giveaway._id}/my-status`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message || "Unable to verify participation."
+          );
+        }
+
+        setParticipating(data.participating === true);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          setParticipationError(
+            err.message || "Unable to verify participation."
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setParticipationLoading(false);
+        }
+      }
+    }
+
+    fetchParticipationStatus();
+
+    return () => controller.abort();
+  }, [giveaway?._id]);
 
   // Fetch the actual logged-in user's wallet.
   useEffect(() => {
@@ -167,6 +227,15 @@ function GiveawayDetails() {
     }
 
     if (!giveaway || !prize || !wallet) return;
+
+    if (
+      participating ||
+      participationLoading ||
+      participationError
+    ) {
+      return;
+    }
+
     if (walletLoading || walletError || !sufficientBalance) return;
 
     setConfirmationOpen(true);
@@ -176,7 +245,17 @@ function GiveawayDetails() {
   const confirmJoin = async () => {
     const token = localStorage.getItem("velopToken");
 
-    if (!token || !giveaway || !prize || !wallet) return;
+    if (
+      !token ||
+      !giveaway ||
+      !prize ||
+      !wallet ||
+      participating ||
+      participationLoading ||
+      participationError
+    ) {
+      return;
+    }
 
     try {
       setJoining(true);
@@ -204,6 +283,9 @@ function GiveawayDetails() {
           data.message || "Unable to join giveaway."
         );
       }
+
+      // Mark the user as an existing participant.
+      setParticipating(true);
 
       // Update the displayed wallet after successful participation.
       setWallet((previousWallet) => ({
@@ -379,6 +461,9 @@ function GiveawayDetails() {
               joining ||
               walletLoading ||
               !!walletError ||
+              participationLoading ||
+              !!participationError ||
+              participating ||
               !wallet ||
               giveaway.status !== "active" ||
               !sufficientBalance
@@ -386,17 +471,23 @@ function GiveawayDetails() {
           >
             {joining
               ? "Joining..."
-              : giveaway.status !== "active"
-                ? "Giveaway Closed"
-                : walletLoading
-                  ? "Checking Balance..."
-                  : walletError
-                    ? "Wallet Unavailable"
-                    : !wallet
-                      ? "Login to Participate"
-                      : !sufficientBalance
-                        ? `Earn More ${prize.currency}`
-                        : `Join for ${entryFee.toLocaleString("en-IN")} ${prize.currency}`}
+              : participating
+                ? "Already Joined"
+                : participationLoading
+                  ? "Checking Participation..."
+                  : participationError
+                    ? "Unable to Verify Participation"
+                    : giveaway.status !== "active"
+                      ? "Giveaway Closed"
+                      : walletLoading
+                        ? "Checking Balance..."
+                        : walletError
+                          ? "Wallet Unavailable"
+                          : !wallet
+                            ? "Login to Participate"
+                            : !sufficientBalance
+                              ? `Earn More ${prize.currency}`
+                              : `Join for ${entryFee.toLocaleString("en-IN")} ${prize.currency}`}
           </button>
 
           {feedback && (
@@ -574,7 +665,13 @@ function GiveawayDetails() {
                 type="button"
                 className="details-join-button"
                 onClick={confirmJoin}
-                disabled={joining || !canJoin}
+                disabled={
+                  joining ||
+                  !canJoin ||
+                  participating ||
+                  participationLoading ||
+                  !!participationError
+                }
               >
                 {joining
                   ? "Joining Giveaway..."
