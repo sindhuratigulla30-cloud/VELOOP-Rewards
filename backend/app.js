@@ -17,7 +17,7 @@ const app = express();
 
 // Allowed frontend URLs
 const allowedOrigins = [
-  "https://veloop-rewards-frontend.vercel.app",
+  "https://velop-rewards-frontend.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174",
   ...(process.env.CORS_ORIGINS
