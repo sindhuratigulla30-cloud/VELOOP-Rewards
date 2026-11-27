@@ -43,11 +43,12 @@ const participationSchema = new mongoose.Schema(
       type: Date,
       default: Date.now
     },
+
     idempotencyKey: {
       type: String,
-      trim: true,
-      default: null
+      trim: true
     },
+
     deviceHash: {
       type: String,
       trim: true,
@@ -64,6 +65,8 @@ participationSchema.index(
   { userId: 1, giveawayId: 1 },
   { unique: true }
 );
+
+// Unique sparse index for supplied idempotency keys.
 participationSchema.index(
   { idempotencyKey: 1 },
   { unique: true, sparse: true }

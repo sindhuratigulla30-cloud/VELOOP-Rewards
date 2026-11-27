@@ -52,6 +52,10 @@ export const joinGiveaway = async (req, res) => {
       .lean();
 
     if (replayed) {
+      const replayedUser = await User.findById(req.user._id)
+        .select("wallet")
+        .lean();
+
       return res.status(200).json({
         success: true,
         message: "Giveaway participation already recorded.",
@@ -60,7 +64,8 @@ export const joinGiveaway = async (req, res) => {
           prizeName: replayed.prizeId?.name || "Giveaway prize",
           entryFee: replayed.entryFee,
           currency: replayed.currency,
-          remainingBalance: null,
+          remainingBalance:
+            replayedUser?.wallet?.[replayed.currency] ?? null,
           replayed: true
         }
       });
@@ -157,7 +162,7 @@ export const joinGiveaway = async (req, res) => {
             currency,
             status: "joined",
             joinedAt: now,
-            idempotencyKey: idempotencyKey || null,
+            ...(idempotencyKey ? { idempotencyKey } : {}),
             deviceHash: req.securityContext?.deviceHash || ""
           }
         ],
@@ -262,7 +267,6 @@ export const joinGiveaway = async (req, res) => {
   }
 };
 
-
 // Get current active giveaway
 export const getCurrentGiveaway = async (req, res) => {
   try {
@@ -333,7 +337,6 @@ export const getCurrentGiveaway = async (req, res) => {
     });
   }
 };
-
 
 // Get a giveaway by ID
 export const getGiveawayById = async (req, res) => {
@@ -407,7 +410,6 @@ export const getGiveawayById = async (req, res) => {
   }
 };
 
-
 // Get the authenticated user's participation status for a giveaway.
 export const getMyGiveawayStatus = async (req, res) => {
   try {
@@ -456,8 +458,10 @@ export const getMyGiveawayStatus = async (req, res) => {
           }
         : null
     });
+
   } catch (error) {
     console.error("Get my giveaway status error:", error);
+
     return res.status(500).json({
       success: false,
       code: "STATUS_LOAD_FAILED",
@@ -465,7 +469,6 @@ export const getMyGiveawayStatus = async (req, res) => {
     });
   }
 };
-
 
 // Get previous giveaways
 export const getPreviousGiveaways = async (req, res) => {
