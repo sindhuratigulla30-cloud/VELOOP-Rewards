@@ -20,7 +20,6 @@ import airpodsImage from "./assets/airpods.png";
 import amazonImage from "./assets/amazon.png";
 import giftBoxImage from "./assets/gift-box.png";
 import API_URL from "./api.js";
-import { giveawayDemoData } from "./data/giveawayData.js";
 
 import {
   Gift,
@@ -67,7 +66,12 @@ function HomePage() {
   const [giveawayLoading, setGiveawayLoading] = useState(true);
   const [giveawayError, setGiveawayError] = useState("");
   const [winnerTab, setWinnerTab] = useState("current");
-  const [winnerSlideIndex, setWinnerSlideIndex] = useState(0);
+  const [currentWinners, setCurrentWinners] = useState([]);
+  const [previousWinners, setPreviousWinners] = useState([]);
+  const [currentWinnersLoading, setCurrentWinnersLoading] = useState(false);
+  const [previousWinnersLoading, setPreviousWinnersLoading] = useState(true);
+  const [currentWinnersError, setCurrentWinnersError] = useState("");
+  const [previousWinnersError, setPreviousWinnersError] = useState("");
   const [openFaq, setOpenFaq] = useState(0);
   const [countdown, setCountdown] = useState({
     days: 0,
@@ -113,13 +117,111 @@ function HomePage() {
   }, [giveaway]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setWinnerSlideIndex((previous) =>
-        (previous + 1) % giveawayDemoData.winners.length
-      );
-    }, 4200);
+    const controller = new AbortController();
 
-    return () => window.clearInterval(timer);
+    async function loadCurrentWinners() {
+      if (!giveaway?._id || giveaway.status !== "completed") {
+        setCurrentWinners([]);
+        setCurrentWinnersError("");
+        setCurrentWinnersLoading(false);
+        return;
+      }
+
+      try {
+        setCurrentWinnersLoading(true);
+        setCurrentWinnersError("");
+
+        const response = await fetch(
+          `${API_URL}/api/winners/${giveaway._id}`,
+          { signal: controller.signal }
+        );
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Unable to load winners.");
+        }
+
+        setCurrentWinners(data.winners || []);
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setCurrentWinnersError(
+            error.message || "Unable to load winners."
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setCurrentWinnersLoading(false);
+        }
+      }
+    }
+
+    void loadCurrentWinners();
+
+    return () => controller.abort();
+  }, [giveaway?._id, giveaway?.status]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadPreviousWinners() {
+      try {
+        setPreviousWinnersLoading(true);
+        setPreviousWinnersError("");
+
+        const response = await fetch(
+          `${API_URL}/api/giveaways/previous`,
+          { signal: controller.signal }
+        );
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message || "Unable to load previous giveaways."
+          );
+        }
+
+        const completedGiveaways = (data.giveaways || []).filter(
+          (item) => item.status === "completed"
+        );
+
+        const winnerGroups = await Promise.all(
+          completedGiveaways.map(async (item) => {
+            const winnersResponse = await fetch(
+              `${API_URL}/api/winners/${item._id}`,
+              { signal: controller.signal }
+            );
+            const winnersData = await winnersResponse.json();
+
+            if (!winnersResponse.ok || !winnersData.success) {
+              throw new Error(
+                winnersData.message || "Unable to load previous winners."
+              );
+            }
+
+            return (winnersData.winners || []).map((winner) => ({
+              ...winner,
+              giveawayTitle: item.title
+            }));
+          })
+        );
+
+        setPreviousWinners(winnerGroups.flat());
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          setPreviousWinnersError(
+            error.message || "Unable to load previous winners."
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setPreviousWinnersLoading(false);
+        }
+      }
+    }
+
+    void loadPreviousWinners();
+
+    return () => controller.abort();
   }, []);
 
   return (
@@ -384,26 +486,38 @@ function HomePage() {
             </div>
           </div>
 
-          <div className="winner-announcement" aria-live="polite">
-            <Trophy size={18} />
-            <strong>{giveawayDemoData.winners[winnerSlideIndex].userId}</strong>
-            <span>
-              won {giveawayDemoData.winners[winnerSlideIndex].prize}
-            </span>
-            <small>Recent demo winner</small>
-          </div>
+          {previousWinners.length > 0 && (
+            <div className="winner-announcement" aria-live="polite">
+              <Trophy size={18} />
+              <strong>{previousWinners[0].name}</strong>
+              <span>won {previousWinners[0].prize}</span>
+              <small>{previousWinners[0].giveawayTitle}</small>
+            </div>
+          )}
 
           {winnerTab === "current" ? (
-            giveaway?.status === "ended" ? (
+            currentWinnersLoading ? (
+              <p className="winner-pending" role="status">
+                Loading winner announcements...
+              </p>
+            ) : currentWinnersError ? (
+              <p className="giveaway-empty-state" role="alert">
+                {currentWinnersError}
+              </p>
+            ) : currentWinners.length > 0 ? (
               <div className="winner-list">
-                {giveawayDemoData.winners.map((winner) => (
-                  <article className="winner-card" key={`${winner.userId}-${winner.prize}`}>
+                {currentWinners.map((winner) => (
+                  <article className="winner-card" key={winner.winnerId}>
                     <div className="winner-avatar"><Trophy size={20} /></div>
                     <div>
-                      <strong>{winner.userId}</strong>
+                      <strong>{winner.name}</strong>
                       <span>Won {winner.prize}</span>
                     </div>
-                    <time>{winner.date}</time>
+                    <time>
+                      {winner.selectedAt
+                        ? new Date(winner.selectedAt).toLocaleDateString("en-IN")
+                        : "Date unavailable"}
+                    </time>
                   </article>
                 ))}
               </div>
@@ -411,27 +525,54 @@ function HomePage() {
               <div className="winner-pending">
                 <Trophy size={30} />
                 <div>
-                  <strong>Winners have not been finalized</strong>
-                  <p>Winner announcements will appear after the giveaway ends.</p>
+                  <strong>No current winner announcement</strong>
+                  <p>
+                    Winners will appear here after the giveaway ends and
+                    selection is finalized.
+                  </p>
                 </div>
               </div>
             )
           ) : (
-            <div className="winner-list">
-              {giveawayDemoData.previousWinners.map((winner) => (
-                <article className="winner-card" key={`${winner.userId}-${winner.prize}`}>
-                  <div className="winner-avatar"><Trophy size={20} /></div>
-                  <div>
-                    <strong>{winner.userId}</strong>
-                    <span>Won {winner.prize}</span>
-                    <small>{winner.giveaway}</small>
-                  </div>
-                  <time>{winner.date}</time>
-                </article>
-              ))}
-            </div>
+            previousWinnersLoading ? (
+              <p className="winner-pending" role="status">
+                Loading previous winners...
+              </p>
+            ) : previousWinnersError ? (
+              <p className="giveaway-empty-state" role="alert">
+                {previousWinnersError}
+              </p>
+            ) : previousWinners.length > 0 ? (
+              <div className="winner-list">
+                {previousWinners.map((winner) => (
+                  <article className="winner-card" key={winner.winnerId}>
+                    <div className="winner-avatar"><Trophy size={20} /></div>
+                    <div>
+                      <strong>{winner.name}</strong>
+                      <span>Won {winner.prize}</span>
+                      <small>{winner.giveawayTitle}</small>
+                    </div>
+                    <time>
+                      {winner.selectedAt
+                        ? new Date(winner.selectedAt).toLocaleDateString("en-IN")
+                        : "Date unavailable"}
+                    </time>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="winner-pending">
+                <Trophy size={30} />
+                <div>
+                  <strong>No previous winners to display</strong>
+                  <p>
+                    Verified winner announcements will appear here after
+                    completed giveaways.
+                  </p>
+                </div>
+              </div>
+            )
           )}
-          <p className="demo-note">Displayed winner examples are fictional demo data.</p>
         </section>
 
         <section className="how-section" id="how-it-works">

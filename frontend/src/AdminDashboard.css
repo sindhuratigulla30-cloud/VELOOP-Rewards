@@ -89,6 +89,14 @@
   color: #e9b956;
 }
 
+.admin-logout:focus-visible,
+.admin-refresh:focus-visible,
+.admin-member-filters select:focus-visible,
+.admin-pagination button:focus-visible {
+  outline: 3px solid #f3cb70;
+  outline-offset: 3px;
+}
+
 .admin-main {
   width: 90%;
   max-width: 1400px;
@@ -212,6 +220,11 @@
   background: #160f23;
 }
 
+.admin-search:focus-within {
+  border-color: #e9b956;
+  box-shadow: 0 0 0 2px rgb(233 185 86 / 20%);
+}
+
 .admin-search input {
   width: 100%;
   min-width: 0;
@@ -243,6 +256,7 @@
 
 .admin-members-table {
   width: 100%;
+  min-width: 780px;
   border-collapse: collapse;
   text-align: left;
   white-space: nowrap;
@@ -323,6 +337,11 @@
 .admin-pagination button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.admin-pagination button:hover:not(:disabled) {
+  border-color: #e9b956;
+  background: #35283d;
 }
 
 .admin-error {

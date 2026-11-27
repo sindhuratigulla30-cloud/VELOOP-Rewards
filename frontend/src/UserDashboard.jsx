@@ -25,6 +25,10 @@ function formatDate(value) {
   });
 }
 
+function isGiftCardCategory(category) {
+  return /voucher|gift[ _-]?card/i.test(String(category || ""));
+}
+
 function UserDashboard() {
   const navigate = useNavigate();
 
@@ -197,7 +201,7 @@ function UserDashboard() {
     const form = claimForms[winnerId] || {};
     const category = winner.prize?.category || "";
 
-    const isGiftCard = /voucher|gift card/i.test(category);
+    const isGiftCard = isGiftCardCategory(category);
 
     const payload = isGiftCard
       ? { email: form.email }
@@ -427,8 +431,8 @@ function UserDashboard() {
                     ) === winnerId
                 );
 
-                const isGiftCard = /voucher|gift card/i.test(
-                  winner.prize?.category || ""
+                const isGiftCard = isGiftCardCategory(
+                  winner.prize?.category
                 );
 
                 const form = claimForms[winnerId] || {};

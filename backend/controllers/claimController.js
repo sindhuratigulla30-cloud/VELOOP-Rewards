@@ -50,12 +50,10 @@ export const submitClaim = async (req, res) => {
       });
     }
 
-    const category = String(winner.prizeId.category || "").toLowerCase();
-
-    const claimType =
-      category.includes("voucher") || category.includes("gift card")
-        ? "gift_card"
-        : "physical";
+    const category = String(winner.prizeId.category || "");
+    const claimType = /voucher|gift[ _-]?card/i.test(category)
+      ? "gift_card"
+      : "physical";
 
     let details = {};
 
