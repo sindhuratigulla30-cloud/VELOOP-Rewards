@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ShieldCheck,
@@ -52,24 +52,20 @@ function AdminDashboard() {
 
   const token = localStorage.getItem("velopToken");
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("velopToken");
     localStorage.removeItem("velopUser");
     navigate("/login", { replace: true });
-  };
+  }, [navigate]);
 
-  const requestHeaders = {
-    Authorization: `Bearer ${token}`
-  };
-
-  const fetchStatistics = async () => {
+  const fetchStatistics = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
       const response = await fetch(
         `${API_URL}/api/admin/dashboard`,
-        { headers: requestHeaders }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       const data = await response.json();
@@ -94,9 +90,9 @@ function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleLogout, token]);
 
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async () => {
     try {
       setMembersLoading(true);
       setMembersError("");
@@ -110,7 +106,7 @@ function AdminDashboard() {
 
       const response = await fetch(
         `${API_URL}/api/admin/members?${params}`,
-        { headers: requestHeaders }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       const data = await response.json();
@@ -135,7 +131,7 @@ function AdminDashboard() {
     } finally {
       setMembersLoading(false);
     }
-  };
+  }, [handleLogout, page, search, status, token]);
 
   useEffect(() => {
     if (!token) {
@@ -143,14 +139,22 @@ function AdminDashboard() {
       return;
     }
 
-    fetchStatistics();
-  }, []);
+    async function initializeStatistics() {
+      await fetchStatistics();
+    }
+
+    void initializeStatistics();
+  }, [fetchStatistics, navigate, token]);
 
   useEffect(() => {
-    if (token) {
-      fetchMembers();
+    if (!token) return;
+
+    async function initializeMembers() {
+      await fetchMembers();
     }
-  }, [page, search, status]);
+
+    void initializeMembers();
+  }, [fetchMembers, token]);
 
   const statCards = [
     {

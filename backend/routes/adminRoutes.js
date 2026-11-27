@@ -1,8 +1,15 @@
+
 import express from "express";
 
 import {
   getAdminDashboard,
-  getAllMembers
+  getAllMembers,
+  getAllGiveaways,
+  createGiveaway,
+  updateGiveaway,
+  updateGiveawayStatus,
+  addGiveawayPrize,
+  updateGiveawayPrize
 } from "../controllers/adminController.js";
 
 import {
@@ -12,13 +19,24 @@ import {
 
 const router = express.Router();
 
-// All routes in this file require Admin authentication.
+// Every admin endpoint requires an active authenticated admin.
 router.use(protect, adminOnly);
 
-// Admin dashboard statistics
+// Dashboard and members
 router.get("/dashboard", getAdminDashboard);
-
-// View and search members
 router.get("/members", getAllMembers);
+
+// Giveaway management
+router.get("/giveaways", getAllGiveaways);
+router.post("/giveaways", createGiveaway);
+router.put("/giveaways/:id", updateGiveaway);
+router.patch("/giveaways/:id/status", updateGiveawayStatus);
+
+// Prize management
+router.post("/giveaways/:id/prizes", addGiveawayPrize);
+router.put(
+  "/giveaways/:id/prizes/:prizeId",
+  updateGiveawayPrize
+);
 
 export default router;

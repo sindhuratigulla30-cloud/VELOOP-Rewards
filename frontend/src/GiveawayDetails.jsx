@@ -96,9 +96,6 @@ function GiveawayDetails() {
     const token = localStorage.getItem("velopToken");
 
     if (!giveaway?._id || !token) {
-      setParticipating(false);
-      setParticipationLoading(false);
-      setParticipationError("");
       return;
     }
 
@@ -151,9 +148,6 @@ function GiveawayDetails() {
     const token = localStorage.getItem("velopToken");
 
     if (!token) {
-      setWallet(null);
-      setWalletLoading(false);
-      setWalletError("");
       return;
     }
 

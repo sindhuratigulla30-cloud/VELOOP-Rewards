@@ -19,6 +19,7 @@ const writeAuditLog = async (data) => {
 export const joinGiveaway = async (req, res) => {
   const { giveawayId } = req.params;
   const { prizeId } = req.body || {};
+
   const idempotencyKey =
     typeof req.headers["idempotency-key"] === "string"
       ? req.headers["idempotency-key"].trim()
@@ -41,6 +42,7 @@ export const joinGiveaway = async (req, res) => {
     });
   }
 
+  // Handle duplicate requests safely using the idempotency key.
   if (idempotencyKey) {
     const replayed = await Participation.findOne({
       userId: req.user._id,
@@ -52,9 +54,9 @@ export const joinGiveaway = async (req, res) => {
       .lean();
 
     if (replayed) {
-      const replayedUser = await User.findById(req.user._id)
-        .select("wallet")
-        .lean();
+      // Use the wallet already loaded by authentication middleware.
+      const remainingBalance =
+        req.user?.wallet?.[replayed.currency] ?? null;
 
       return res.status(200).json({
         success: true,
@@ -64,8 +66,7 @@ export const joinGiveaway = async (req, res) => {
           prizeName: replayed.prizeId?.name || "Giveaway prize",
           entryFee: replayed.entryFee,
           currency: replayed.currency,
-          remainingBalance:
-            replayedUser?.wallet?.[replayed.currency] ?? null,
+          remainingBalance,
           replayed: true
         }
       });
@@ -231,13 +232,41 @@ export const joinGiveaway = async (req, res) => {
     });
 
     const errors = {
-      GIVEAWAY_NOT_FOUND: [404, "GIVEAWAY_NOT_FOUND", "Giveaway not found."],
-      GIVEAWAY_NOT_ACTIVE: [400, "GIVEAWAY_NOT_ACTIVE", "This giveaway is not currently active."],
-      PRIZE_NOT_AVAILABLE: [404, "PRIZE_NOT_AVAILABLE", "This prize is not available."],
-      USER_NOT_ACTIVE: [403, "USER_NOT_ACTIVE", "Your account is not active."],
-      ALREADY_JOINED: [409, "ALREADY_PARTICIPATING", "You have already joined this giveaway."],
-      INSUFFICIENT_BALANCE: [400, "INSUFFICIENT_BALANCE", "Insufficient wallet balance."],
-      INVALID_CURRENCY: [400, "INVALID_CURRENCY", "Invalid prize entry fee or currency."]
+      GIVEAWAY_NOT_FOUND: [
+        404,
+        "GIVEAWAY_NOT_FOUND",
+        "Giveaway not found."
+      ],
+      GIVEAWAY_NOT_ACTIVE: [
+        400,
+        "GIVEAWAY_NOT_ACTIVE",
+        "This giveaway is not currently active."
+      ],
+      PRIZE_NOT_AVAILABLE: [
+        404,
+        "PRIZE_NOT_AVAILABLE",
+        "This prize is not available."
+      ],
+      USER_NOT_ACTIVE: [
+        403,
+        "USER_NOT_ACTIVE",
+        "Your account is not active."
+      ],
+      ALREADY_JOINED: [
+        409,
+        "ALREADY_PARTICIPATING",
+        "You have already joined this giveaway."
+      ],
+      INSUFFICIENT_BALANCE: [
+        400,
+        "INSUFFICIENT_BALANCE",
+        "Insufficient wallet balance."
+      ],
+      INVALID_CURRENCY: [
+        400,
+        "INVALID_CURRENCY",
+        "Invalid prize entry fee or currency."
+      ]
     };
 
     if (errors[error.message]) {

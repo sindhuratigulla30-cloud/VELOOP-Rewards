@@ -104,7 +104,11 @@ function HomePage() {
   };
 
   useEffect(() => {
-    loadGiveaway();
+    async function initializeGiveaway() {
+      await loadGiveaway();
+    }
+
+    void initializeGiveaway();
   }, []);
 
   useEffect(() => {
